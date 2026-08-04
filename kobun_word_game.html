@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>古文単語マスター - Kobun Word Game</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS (XLSX) Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@400;500;700&family=Noto+Serif+JP:wght@400;600;900&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Kiwi Maru', 'Noto Serif JP', serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #312e81 100%);
+            min-height: 100vh;
+            color: #1e293b;
+        }
+
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+
+        .transform-style-3d {
+            transform-style: preserve-3d;
+        }
+
+        .backface-hidden {
+            backface-visibility: hidden;
+        }
+
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.5);
+            border-radius: 8px;
+        }
+
+        @keyframes toast-slide-in {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .toast-animate {
+            animation: toast-slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    </style>
+</head>
+<body class="p-2 md:p-6 text-slate-800 antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- Custom Toast Container -->
+    <div id="toastContainer" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none w-11/12 max-w-md"></div>
+
+    <div id="app" class="max-w-5xl mx-auto pb-12">
+        <header class="glass-panel rounded-3xl p-4 md:p-6 mb-6 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-4 cursor-pointer" onclick="switchTab('dashboard')">
+                <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-indigo-500/30">
+                    古
+                </div>
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-black text-slate-900 tracking-wider">古文単語マスター</h1>
+                    <p class="text-xs md:text-sm text-indigo-700 font-medium">スプレッドシート全自動記憶・完全保存版</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 bg-indigo-50/80 p-2 rounded-2xl border border-indigo-100">
+                <div class="px-3 py-1 bg-white rounded-xl shadow-sm text-center">
+                    <span class="text-xs text-slate-500 block font-sans">総収録数</span>
+                    <span id="totalWordCountBadge" class="text-lg font-bold text-indigo-700">0語</span>
+                </div>
+                <div class="px-3 py-1 bg-white rounded-xl shadow-sm text-center">
+                    <span class="text-xs text-slate-500 block font-sans">要復習</span>
+                    <span id="weakWordCountBadge" class="text-lg font-bold text-amber-600">0語</span>
+                </div>
+            </div>
+        </header>
+
+        <nav class="flex flex-wrap gap-2 mb-6">
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="nav-btn active flex-1 min-w-[120px] py-3 px-4 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 bg-white text-indigo-900 shadow-md">
+                <i class="fa-solid fa-house"></i> ホーム
+            </button>
+            <button onclick="switchTab('quiz')" id="tab-quiz" class="nav-btn flex-1 min-w-[120px] py-3 px-4 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 bg-white/70 text-slate-700 hover:bg-white">
+                <i class="fa-solid fa-circle-question"></i> 4択クイズ
+            </button>
+            <button onclick="switchTab('timeattack')" id="tab-timeattack" class="nav-btn flex-1 min-w-[120px] py-3 px-4 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 bg-white/70 text-slate-700 hover:bg-white">
+                <i class="fa-solid fa-stopwatch"></i> タイムアタック
+            </button>
+            <button onclick="switchTab('flashcard')" id="tab-flashcard" class="nav-btn flex-1 min-w-[120px] py-3 px-4 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 bg-white/70 text-slate-700 hover:bg-white">
+                <i class="fa-solid fa-clone"></i> 単語カード
+            </button>
+            <button onclick="switchTab('memory')" id="tab-memory" class="nav-btn flex-1 min-w-[120px] py-3 px-4 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 bg-white/70 text-slate-700 hover:bg-white">
+                <i class="fa-solid fa-puzzle-piece"></i> 神経衰弱
+            </button>
+            <button onclick="switchTab('wordlist')" id="tab-wordlist" class="nav-btn flex-1 min-w-[120px] py-3 px-4 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 bg-white/70 text-slate-700 hover:bg-white">
+                <i class="fa-solid fa-book"></i> 単語一覧
+            </button>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main>
+            <section id="view-dashboard" class="tab-content space-y-6">
+                <!-- File Drag & Drop Zone -->
+                <div class="glass-panel rounded-3xl p-6 md:p-8 shadow-xl text-center border-2 border-dashed border-indigo-300 hover:border-indigo-500 transition-all cursor-pointer relative group" id="dropZone" onclick="document.getElementById('excelFileInput').click()">
+                    <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileUpload(event)">
+                    
+                    <div class="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-4 text-3xl group-hover:scale-110 transition-transform shadow-inner">
+                        <i class="fa-solid fa-file-excel"></i>
+                    </div>
+                    
+                    <h2 class="text-xl md:text-2xl font-bold text-slate-900 mb-2">
+                        スプレッドシートファイルをアップロード
+                    </h2>
+                    <p class="text-sm text-slate-600 max-w-md mx-auto mb-3">
+                        <span class="font-bold text-indigo-700">kobun_tango_v24.xlsx</span> 等を選択・ドロップすると、全単語が<b>ブラウザに自動保存</b>され次回から読み込み不要になります。
+                    </p>
+                    
+                    <div class="flex items-center justify-center gap-3">
+                        <button class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-600/30">
+                            <i class="fa-solid fa-upload mr-2"></i> ファイルを選択
+                        </button>
+                        <button onclick="event.stopPropagation(); resetToDefaultWords();" class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all">
+                            <i class="fa-solid fa-rotate-left mr-1"></i> 標準データに初期化
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Word List Status Card -->
+                <div class="glass-panel rounded-3xl p-6 shadow-xl">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-database text-indigo-600"></i> 現在の単語ライブラリ
+                        </h3>
+                        <span id="sourceLabel" class="text-xs px-3 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-full">データ読み込み中...</span>
+                    </div>
+
+                    <div id="categoryBadges" class="flex flex-wrap gap-2 mb-6">
+                        <!-- Loaded dynamically -->
+                    </div>
+
+                    <!-- Quick Start Game Modes -->
+                    <h4 class="text-sm font-bold text-slate-600 mb-3">学習モード一覧</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div onclick="switchTab('quiz')" class="bg-white/80 hover:bg-white p-5 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-slate-100 group">
+                            <div class="text-indigo-600 text-2xl mb-2 group-hover:scale-110 transition-transform"><i class="fa-solid fa-circle-question"></i></div>
+                            <h5 class="font-bold text-slate-900">4択クイズ</h5>
+                            <p class="text-xs text-slate-500 mt-1">全収録単語から出題される定番テスト</p>
+                        </div>
+                        <div onclick="switchTab('timeattack')" class="bg-white/80 hover:bg-white p-5 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-slate-100 group">
+                            <div class="text-amber-500 text-2xl mb-2 group-hover:scale-110 transition-transform"><i class="fa-solid fa-bolt"></i></div>
+                            <h5 class="font-bold text-slate-900">60秒タイムアタック</h5>
+                            <p class="text-xs text-slate-500 mt-1">限界速度でどれだけ正解できるか挑戦</p>
+                        </div>
+                        <div onclick="switchTab('flashcard')" class="bg-white/80 hover:bg-white p-5 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-slate-100 group">
+                            <div class="text-purple-600 text-2xl mb-2 group-hover:scale-110 transition-transform"><i class="fa-solid fa-clone"></i></div>
+                            <h5 class="font-bold text-slate-900">3D単語カード</h5>
+                            <p class="text-xs text-slate-500 mt-1">カード回転＆音声読み上げ（TTS）</p>
+                        </div>
+                        <div onclick="switchTab('memory')" class="bg-white/80 hover:bg-white p-5 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer border border-slate-100 group">
+                            <div class="text-emerald-600 text-2xl mb-2 group-hover:scale-110 transition-transform"><i class="fa-solid fa-puzzle-piece"></i></div>
+                            <h5 class="font-bold text-slate-900">神経衰弱</h5>
+                            <p class="text-xs text-slate-500 mt-1">古文と現代語訳をマッチング</p>
+                        </div>
+                        <div onclick="startWeaknessQuiz()" class="bg-gradient-to-br from-amber-500 to-orange-600 text-white p-5 rounded-2xl shadow-lg cursor-pointer hover:opacity-95 transition-all group col-span-1 sm:col-span-2 lg:col-span-1">
+                            <div class="text-white text-2xl mb-2 group-hover:scale-110 transition-transform"><i class="fa-solid fa-fire"></i></div>
+                            <h5 class="font-bold">要復習 集中特訓</h5>
+                            <p class="text-xs text-amber-100 mt-1">ブックマーク＆間違えた単語のみ集中復習</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-quiz" class="tab-content hidden space-y-6">
+                <div class="glass-panel rounded-3xl p-6 md:p-8 shadow-xl max-w-2xl mx-auto">
+                    <!-- Quiz Header Stats -->
+                    <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
+                        <div class="flex items-center gap-3">
+                            <span class="px-3 py-1 bg-indigo-100 text-indigo-700 font-bold rounded-xl text-xs" id="quizCategoryTag">品詞</span>
+                            <span class="text-sm font-bold text-slate-500" id="quizProgressText">第 1 問</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-bold text-amber-600" id="quizStreakText"><i class="fa-solid fa-fire"></i> 0 連続正解</span>
+                        </div>
+                    </div>
+
+                    <!-- Question Box -->
+                    <div class="text-center py-6 mb-6 bg-indigo-50/50 rounded-2xl border border-indigo-100 relative">
+                        <p class="text-xs text-indigo-500 font-bold mb-1" id="quizReading">読み</p>
+                        <h3 class="text-3xl md:text-4xl font-black text-slate-900 mb-3 tracking-wide" id="quizWord">古文単語</h3>
+                        <p class="text-xs text-slate-500 italic max-w-md mx-auto px-4" id="quizExample">例文がここに入ります</p>
+                    </div>
+
+                    <!-- Options Grid -->
+                    <div class="grid grid-cols-1 gap-3 mb-6" id="quizOptions">
+                        <!-- Dynamic Options -->
+                    </div>
+
+                    <!-- Explanation Card -->
+                    <div id="quizExplanation" class="hidden p-4 rounded-2xl bg-slate-100 text-slate-800 text-sm mb-6 border-l-4 border-indigo-600">
+                        <p class="font-bold mb-1" id="explanationResult">正解！</p>
+                        <p id="explanationText" class="text-xs leading-relaxed text-slate-600"></p>
+                    </div>
+
+                    <!-- Action Footer -->
+                    <div class="flex justify-end">
+                        <button id="nextQuizBtn" onclick="nextQuizQuestion()" class="hidden px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2">
+                            次の問題 <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-timeattack" class="tab-content hidden space-y-6">
+                <div class="glass-panel rounded-3xl p-6 md:p-8 shadow-xl max-w-2xl mx-auto text-center">
+                    <!-- Start Overlay -->
+                    <div id="taStartCard" class="py-10">
+                        <div class="w-20 h-20 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                            <i class="fa-solid fa-stopwatch"></i>
+                        </div>
+                        <h2 class="text-2xl font-black text-slate-900 mb-2">60秒 タイムアタック</h2>
+                        <p class="text-sm text-slate-600 max-w-md mx-auto mb-8">制限時間60秒でどれだけ多くの単語に正解できるか限界突破にチャレンジ！</p>
+                        <button onclick="startTimeAttack()" class="px-10 py-4 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl shadow-xl shadow-amber-500/30 text-lg transition-all transform hover:scale-105">
+                            <i class="fa-solid fa-play mr-2"></i> チャレンジ開始
+                        </button>
+                    </div>
+
+                    <!-- Playing State -->
+                    <div id="taPlayCard" class="hidden">
+                        <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
+                            <div class="text-left">
+                                <span class="text-xs text-slate-400 block font-sans">スコア</span>
+                                <span class="text-2xl font-black text-indigo-700" id="taScore">0</span>
+                            </div>
+                            <div class="w-16 h-16 rounded-full bg-amber-500 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-amber-500/30" id="taTimer">
+                                60
+                            </div>
+                            <div class="text-right">
+                                <span class="text-xs text-slate-400 block font-sans">コンボ</span>
+                                <span class="text-2xl font-black text-amber-600" id="taCombo">0</span>
+                            </div>
+                        </div>
+
+                        <div class="py-6 bg-slate-50 rounded-2xl mb-6">
+                            <p class="text-xs text-slate-400 mb-1" id="taReading">読み</p>
+                            <h3 class="text-3xl font-black text-slate-900" id="taWord">単語</h3>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="taOptions">
+                            <!-- Dynamic Options -->
+                        </div>
+                    </div>
+
+                    <!-- Results Card -->
+                    <div id="taResultCard" class="hidden py-8">
+                        <div class="text-5xl mb-2">🏆</div>
+                        <h3 class="text-2xl font-black text-slate-900 mb-1">タイムアップ！</h3>
+                        <p class="text-sm text-slate-500 mb-6">あなたの最終成績</p>
+
+                        <div class="bg-indigo-50 rounded-2xl p-6 mb-8 max-w-xs mx-auto">
+                            <span class="text-xs text-indigo-600 font-bold block mb-1">獲得スコア</span>
+                            <span class="text-4xl font-black text-indigo-900" id="taFinalScore">0</span>
+                            <div class="mt-4 pt-4 border-t border-indigo-100 flex justify-around text-xs text-slate-600">
+                                <div>正解数: <span class="font-bold text-slate-900" id="taCorrectCount">0</span></div>
+                                <div>最大コンボ: <span class="font-bold text-amber-600" id="taMaxCombo">0</span></div>
+                            </div>
+                        </div>
+
+                        <button onclick="startTimeAttack()" class="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg transition-all">
+                            もう一度挑戦する
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-flashcard" class="tab-content hidden space-y-6">
+                <div class="glass-panel rounded-3xl p-6 md:p-8 shadow-xl max-w-xl mx-auto text-center">
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-xs font-bold text-slate-500" id="cardProgress">1 / 100</span>
+                        <button onclick="speakCurrentWord()" class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 hover:bg-indigo-200 flex items-center justify-center transition-all" title="音声読み上げ">
+                            <i class="fa-solid fa-volume-high"></i>
+                        </button>
+                    </div>
+
+                    <!-- 3D Card Container -->
+                    <div class="perspective-1000 my-6 cursor-pointer" onclick="toggleCardFlip()">
+                        <div id="flashcardInner" class="w-full h-72 rounded-3xl transition-transform duration-500 transform-style-3d relative shadow-xl">
+                            <!-- Card Front -->
+                            <div class="absolute inset-0 w-full h-full backface-hidden bg-white rounded-3xl p-8 flex flex-col items-center justify-center border-2 border-indigo-100">
+                                <span class="text-xs px-3 py-1 bg-indigo-50 text-indigo-600 font-bold rounded-full mb-3" id="cardCategory">品詞</span>
+                                <h3 class="text-4xl font-black text-slate-900 mb-2" id="cardWord">古文単語</h3>
+                                <p class="text-sm text-slate-400" id="cardReading">読み</p>
+                                <p class="text-xs text-slate-400 mt-6"><i class="fa-solid fa-rotate mr-1"></i> タップして裏面を表示</p>
+                            </div>
+
+                            <!-- Card Back -->
+                            <div class="absolute inset-0 w-full h-full backface-hidden rotate-y-180 bg-gradient-to-br from-indigo-900 to-slate-900 text-white rounded-3xl p-8 flex flex-col items-center justify-center">
+                                <span class="text-xs text-indigo-300 font-bold mb-2">現代語訳（意味）</span>
+                                <h4 class="text-2xl font-bold mb-4 text-amber-300" id="cardMeaning">意味</h4>
+                                <p class="text-xs text-slate-300 italic max-w-sm" id="cardExample">例文</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card Controls -->
+                    <div class="flex items-center justify-between gap-4">
+                        <button onclick="prevCard()" class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-sm transition-all">
+                            <i class="fa-solid fa-chevron-left mr-1"></i> 前へ
+                        </button>
+
+                        <button onclick="toggleWeakCurrentCard()" id="cardWeakBtn" class="px-4 py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold rounded-xl text-sm transition-all flex items-center gap-1">
+                            <i class="fa-regular fa-bookmark"></i> 要復習に追加
+                        </button>
+
+                        <button onclick="nextCard()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition-all shadow-md">
+                            次へ <i class="fa-solid fa-chevron-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-memory" class="tab-content hidden space-y-6">
+                <div class="glass-panel rounded-3xl p-6 md:p-8 shadow-xl max-w-3xl mx-auto">
+                    <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-200">
+                        <div>
+                            <h3 class="text-xl font-bold text-slate-900">神経衰弱ペアマッチ</h3>
+                            <p class="text-xs text-slate-500">古文単語と対応する現代語訳を合わせよう</p>
+                        </div>
+                        <button onclick="initMemoryGame()" class="px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 transition-all">
+                            <i class="fa-solid fa-rotate-right mr-1"></i> リセット
+                        </button>
+                    </div>
+
+                    <div id="memoryGrid" class="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                        <!-- Dynamic tiles -->
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-wordlist" class="tab-content hidden space-y-6">
+                <div class="glass-panel rounded-3xl p-6 shadow-xl">
+                    <div class="flex flex-col md:flex-row gap-4 justify-between items-center mb-6">
+                        <div class="relative w-full md:w-80">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400"></i>
+                            <input type="text" id="searchInput" oninput="filterWordList()" placeholder="単語・意味・読みで検索..." class="w-full pl-10 pr-4 py-2.5 bg-white rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+
+                        <div class="flex items-center gap-2 w-full md:w-auto">
+                            <button onclick="filterWeakOnlyToggle()" id="weakFilterBtn" class="flex-1 md:flex-none px-4 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition-all">
+                                <i class="fa-solid fa-filter mr-1"></i> 復習のみ表示
+                            </button>
+                            <button onclick="exportToExcel()" class="flex-1 md:flex-none px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md transition-all">
+                                <i class="fa-solid fa-file-export mr-1"></i> Excel保存
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto custom-scrollbar rounded-2xl border border-slate-200">
+                        <table class="w-full text-left border-collapse bg-white">
+                            <thead>
+                                <tr class="bg-indigo-50/80 text-indigo-900 text-xs font-bold border-b border-indigo-100">
+                                    <th class="p-3">単語</th>
+                                    <th class="p-3">読み</th>
+                                    <th class="p-3">現代語訳（意味）</th>
+                                    <th class="p-3">品詞</th>
+                                    <th class="p-3 text-center">要復習</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wordTableBody" class="text-sm divide-y divide-slate-100">
+                                <!-- Dynamic Rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Large Comprehensive Core Dataset of Classical Japanese Vocabulary (High-frequency Kobun Words)
+        const defaultWordList = [
+            { id: 1, word: "あさまし", reading: "あさまし", meaning: "意外だ・驚きあきれるほどだ・情けない", category: "形容詞", example: "あさましく思ひけるほどに" },
+            { id: 2, word: "いとど", reading: "いとど", meaning: "いよいよ・ますます", category: "副詞", example: "いとど心細くぞおぼゆる" },
+            { id: 3, word: "かなし", reading: "かなし", meaning: "愛おしい・かわいい・切ない", category: "形容詞", example: "かなしき子のために" },
+            { id: 4, word: "おぼつかなし", reading: "おぼつかなし", meaning: "ぼんやりしている・不安だ・待ち遠しい", category: "形容詞", example: "消息のおぼつかなきを" },
+            { id: 5, word: "むげに", reading: "むげに", meaning: "むやみに・ひたすら・全く", category: "副詞", example: "むげに思いひ切る" },
+            { id: 6, word: "おはす", reading: "おはす", meaning: "いらっしゃる・おいでになる（尊敬語）", category: "動詞", example: "帝おはしまして" },
+            { id: 7, word: "あはれなり", reading: "あはれなり", meaning: "しみじみとした趣がある・愛おしい", category: "形容動詞", example: "あはれなる景色かな" },
+            { id: 8, word: "やごとなし", reading: "やごとなし", meaning: "尊い・格別だ・捨てておけない", category: "形容詞", example: "やごとなき人々の" },
+            { id: 9, word: "ゆかし", reading: "ゆかし", meaning: "見たい・知りたい・聞きたい", category: "形容詞", example: "ゆかしかりけるままに" },
+            { id: 10, word: "めざまし", reading: "めざまし", meaning: "気にくわない・目を見張るほどだ", category: "形容詞", example: "めざましき者のさま" },
+            { id: 11, word: "ありがたし", reading: "ありがたし", meaning: "めったにない・生きていくのが難しい", category: "形容詞", example: "世にありがたき人" },
+            { id: 12, word: "めでたし", reading: "めでたし", meaning: "すばらしい・立派だ", category: "形容詞", example: "いとめでたき心ばへ" },
+            { id: 13, word: "うし", reading: "うし", meaning: "つらい・不快だ", category: "形容詞", example: "世の中をうしと思ふ" },
+            { id: 14, word: "わびし", reading: "わびし", meaning: "つらい・やりきれない・貧しい", category: "形容詞", example: "わびしく暮らしける" },
+            { id: 15, word: "すさまじ", reading: "すさまじ", meaning: "興ざめだ・殺風景だ", category: "形容詞", example: "冬の夜のすさまじき" },
+            { id: 16, word: "おどろく", reading: "おどろく", meaning: "目を覚ます・ハッと気づく", category: "動詞", example: "秋の風におどろきて" },
+            { id: 17, word: "ののしる", reading: "ののしる", meaning: "大声で騒ぐ・評判になる", category: "動詞", example: "世にののしるほどに" },
+            { id: 18, word: "ねんごろなり", reading: "ねんごろなり", meaning: "熱心だ・親しい", category: "形容動詞", example: "ねんごろに調じける" },
+            { id: 19, word: "つれなし", reading: "つれなし", meaning: "よそよそしい・平然としている", category: "形容詞", example: "つれなく見せかける" },
+            { id: 20, word: "おぼゆ", reading: "おぼゆ", meaning: "思われる・似ている・思い出される", category: "動詞", example: "親に似ておぼゆ" },
+            { id: 21, word: "いみじ", reading: "いみじ", meaning: "とても・すばらしい・ひどい", category: "形容詞", example: "いみじく喜びて" },
+            { id: 22, word: "かたはらいたし", reading: "かたはらいたし", meaning: "みっともない・きまり悪い", category: "形容詞", example: "かたはらいたきこと多し" },
+            { id: 23, word: "こころもとなし", reading: "こころもとなし", meaning: "じれったい・待ち遠しい・不安だ", category: "形容詞", example: "こころもとなき心地して" },
+            { id: 24, word: "あやし", reading: "あやし", meaning: "不思議だ・身分が低い・見苦しい", category: "形容詞", example: "あやしき賤の者" },
+            { id: 25, word: "すごし", reading: "すごし", meaning: "物寂しい・気味が悪い・ぞっとするほどすばらしい", category: "形容詞", example: "山里のすごき夕暮れ" },
+            { id: 26, word: "つれづれなり", reading: "つれづれなり", meaning: "手持ちぶさたで退屈だ・しんみりしている", category: "形容動詞", example: "つれづれなるままに" },
+            { id: 27, word: "すずろなり", reading: "すずろなり", meaning: "あてもない・思いがけない・むやみだ", category: "形容動詞", example: "すずろなる人" },
+            { id: 28, word: "あたらし", reading: "あたらし", meaning: "惜しい・もったいない", category: "形容詞", example: "あたらしき花を散らす" },
+            { id: 29, word: "いとほし", reading: "いとほし", meaning: "かわいそうだ・気の毒だ", category: "形容詞", example: "いとほしと思ひて" },
+            { id: 30, word: "わりなし", reading: "わりなし", meaning: "道理に合わない・ひどい・どうしようもない", category: "形容詞", example: "わりなく泣き給ふ" },
+            { id: 31, word: "まめなり", reading: "まめなり", meaning: "誠実だ・実用的だ", category: "形容動詞", example: "まめやかなる心" },
+            { id: 32, word: "あてなり", reading: "あてなり", meaning: "高貴だ・上品だ", category: "形容動詞", example: "あてなる人の立ち姿" },
+            { id: 33, word: "いたづらなり", reading: "いたづらなり", meaning: "無駄だ・暇だ", category: "形容動詞", example: "いたづらになりにけり" },
+            { id: 34, word: "あだなり", reading: "あだなり", meaning: "浮気だ・はかない", category: "形容動詞", example: "あだなる契り" },
+            { id: 35, word: "けしき", reading: "けしき", meaning: "様子・机嫌・意向", category: "名詞", example: "人のけしきを見る" },
+            { id: 36, word: "ふみ", reading: "ふみ", meaning: "手紙・漢詩文・書物", category: "名詞", example: "ふみを書きて送る" },
+            { id: 37, word: "たより", reading: "たより", meaning: "ついで・頼り・機会・縁故", category: "名詞", example: "風のたよりに聞く" },
+            { id: 38, word: "あそび", reading: "あそび", meaning: "管弦の遊び・詩歌の宴", category: "名詞", example: "夜もすがらあそび給ふ" },
+            { id: 39, word: "うへ", reading: "うへ", meaning: "天皇・奥様・身上", category: "名詞", example: "うへの大かたはらにおはして" },
+            { id: 40, word: "いとま", reading: "いとま", meaning: "暇・休暇・別れ", category: "名詞", example: "いとまを賜りて" }
+        ];
+
+        // Active State Variables
+        let activeWordList = [];
+        let weakWordIds = new Set(JSON.parse(localStorage.getItem('kobun_weak_ids') || '[]'));
+        let currentTab = 'dashboard';
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playTone(freq, type = 'sine', duration = 0.15) {
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e){}
+        }
+
+        function playCorrectSound() {
+            playTone(523.25, 'sine', 0.1);
+            setTimeout(() => playTone(659.25, 'sine', 0.2), 100);
+        }
+
+        function playWrongSound() {
+            playTone(220, 'sawtooth', 0.2);
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            const bgColor = type === 'success' ? 'bg-emerald-600' : type === 'error' ? 'bg-rose-600' : 'bg-indigo-600';
+            const icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+
+            toast.className = `${bgColor} text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 text-sm font-bold toast-animate`;
+            toast.innerHTML = `<i class="fa-solid ${icon} text-lg"></i> <span>${message}</span>`;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadWordListFromStorageOrDefault();
+            setupDragAndDrop();
+        });
+
+        function loadWordListFromStorageOrDefault() {
+            const savedCustomWords = localStorage.getItem('kobun_saved_words_v24');
+            const savedSourceLabel = localStorage.getItem('kobun_saved_source_v24');
+
+            if (savedCustomWords) {
+                try {
+                    activeWordList = JSON.parse(savedCustomWords);
+                    updateSourceLabel(savedSourceLabel || '保存済みカスタムデータ', true);
+                } catch(e) {
+                    activeWordList = [...defaultWordList];
+                    updateSourceLabel('標準収録セット', false);
+                }
+            } else {
+                activeWordList = [...defaultWordList];
+                updateSourceLabel('標準収録セット', false);
+            }
+
+            updateDashboardStats();
+            renderWordListTable();
+        }
+
+        function updateSourceLabel(text, isCustom) {
+            const label = document.getElementById('sourceLabel');
+            label.innerText = `${text} (${activeWordList.length}語)`;
+            if (isCustom) {
+                label.className = 'text-xs px-3 py-1 bg-indigo-100 text-indigo-800 font-bold rounded-full border border-indigo-200';
+            } else {
+                label.className = 'text-xs px-3 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-full border border-emerald-200';
+            }
+        }
+
+        function resetToDefaultWords() {
+            localStorage.removeItem('kobun_saved_words_v24');
+            localStorage.removeItem('kobun_saved_source_v24');
+            activeWordList = [...defaultWordList];
+            updateSourceLabel('標準収録セット', false);
+            updateDashboardStats();
+            renderWordListTable();
+            showToast('標準の単語データに初期化しました', 'info');
+        }
+
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById('dropZone');
+            if (!dropZone) return;
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files && files.length > 0) {
+                    parseExcelOrCsv(files[0]);
+                }
+            });
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            parseExcelOrCsv(file);
+        }
+
+        function parseExcelOrCsv(file) {
+            const fileName = file ? file.name : 'kobun_tango_v24.xlsx';
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    if (!json || json.length < 1) {
+                        showToast('ファイルに有効なデータが含まれていません', 'error');
+                        return;
+                    }
+
+                    // Flexible Header Detection
+                    let wordIdx = -1, meaningIdx = -1, readingIdx = -1, categoryIdx = -1, exampleIdx = -1;
+                    let startRow = 0;
+
+                    if (json.length > 0 && Array.isArray(json[0])) {
+                        const headers = json[0].map(h => String(h || '').trim().toLowerCase());
+                        wordIdx = headers.findIndex(h => /単語|見出し|古文|word|kobun/i.test(h));
+                        meaningIdx = headers.findIndex(h => /意味|現代語|訳|meaning/i.test(h));
+                        readingIdx = headers.findIndex(h => /読み|かな|reading/i.test(h));
+                        categoryIdx = headers.findIndex(h => /品詞|分類|category/i.test(h));
+                        exampleIdx = headers.findIndex(h => /例文|用例|example/i.test(h));
+
+                        if (wordIdx !== -1) startRow = 1;
+                    }
+
+                    if (wordIdx === -1) wordIdx = 0;
+                    if (meaningIdx === -1) meaningIdx = 1;
+
+                    const parsedWords = [];
+                    for (let i = startRow; i < json.length; i++) {
+                        const row = json[i];
+                        if (!row || !row[wordIdx]) continue;
+
+                        const wordVal = String(row[wordIdx]).trim();
+                        if (!wordVal) continue;
+
+                        parsedWords.push({
+                            id: i + 1,
+                            word: wordVal,
+                            reading: readingIdx !== -1 && row[readingIdx] ? String(row[readingIdx]).trim() : wordVal,
+                            meaning: meaningIdx !== -1 && row[meaningIdx] ? String(row[meaningIdx]).trim() : '—',
+                            category: categoryIdx !== -1 && row[categoryIdx] ? String(row[categoryIdx]).trim() : '単語',
+                            example: exampleIdx !== -1 && row[exampleIdx] ? String(row[exampleIdx]).trim() : '例文なし'
+                        });
+                    }
+
+                    if (parsedWords.length > 0) {
+                        activeWordList = parsedWords;
+                        
+                        // Save permanently in LocalStorage
+                        localStorage.setItem('kobun_saved_words_v24', JSON.stringify(parsedWords));
+                        localStorage.setItem('kobun_saved_source_v24', fileName);
+
+                        updateSourceLabel(fileName, true);
+                        updateDashboardStats();
+                        renderWordListTable();
+                        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                        playCorrectSound();
+                        showToast(`${fileName} から全 ${parsedWords.length} 語を永久保存読み込みしました！`, 'success');
+                    } else {
+                        showToast('単語データを抽出できませんでした', 'error');
+                    }
+                } catch (err) {
+                    console.error('File reading error:', err);
+                    showToast('ファイルの解析に失敗しました。正しいExcel/CSV形式か確認してください。', 'error');
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function updateDashboardStats() {
+            document.getElementById('totalWordCountBadge').innerText = `${activeWordList.length}語`;
+            document.getElementById('weakWordCountBadge').innerText = `${weakWordIds.size}語`;
+
+            const catMap = {};
+            activeWordList.forEach(w => {
+                catMap[w.category] = (catMap[w.category] || 0) + 1;
+            });
+
+            const badgesContainer = document.getElementById('categoryBadges');
+            badgesContainer.innerHTML = Object.entries(catMap).map(([cat, count]) => `
+                <span class="px-3 py-1 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm">
+                    ${cat}: <span class="text-indigo-600">${count}</span>
+                </span>
+            `).join('');
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-white', 'text-indigo-900', 'shadow-md');
+                btn.classList.add('bg-white/70', 'text-slate-700');
+            });
+
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            if (activeBtn) {
+                activeBtn.classList.add('active', 'bg-white', 'text-indigo-900', 'shadow-md');
+                activeBtn.classList.remove('bg-white/70', 'text-slate-700');
+            }
+
+            document.querySelectorAll('.tab-content').forEach(sec => sec.classList.add('hidden'));
+            document.getElementById(`view-${tabName}`).classList.remove('hidden');
+
+            if (tabName === 'quiz') initQuiz();
+            if (tabName === 'flashcard') initFlashcards();
+            if (tabName === 'memory') initMemoryGame();
+            if (tabName === 'wordlist') renderWordListTable();
+        }
+
+        let quizPool = [];
+        let quizCurrentIndex = 0;
+        let quizStreak = 0;
+        let currentQuizWord = null;
+
+        function initQuiz(filterWeak = false) {
+            quizPool = filterWeak 
+                ? activeWordList.filter(w => weakWordIds.has(w.id))
+                : [...activeWordList];
+
+            if (quizPool.length === 0) {
+                showToast('対象となる単語が登録されていません', 'error');
+                switchTab('dashboard');
+                return;
+            }
+
+            quizPool.sort(() => Math.random() - 0.5);
+            quizCurrentIndex = 0;
+            quizStreak = 0;
+            loadQuizQuestion();
+        }
+
+        function startWeaknessQuiz() {
+            if (weakWordIds.size === 0) {
+                showToast('現在、要復習としてマークされた単語はありません', 'info');
+                return;
+            }
+            switchTab('quiz');
+            initQuiz(true);
+        }
+
+        function loadQuizQuestion() {
+            document.getElementById('quizExplanation').classList.add('hidden');
+            document.getElementById('nextQuizBtn').classList.add('hidden');
+
+            if (quizCurrentIndex >= quizPool.length) {
+                quizPool.sort(() => Math.random() - 0.5);
+                quizCurrentIndex = 0;
+            }
+
+            currentQuizWord = quizPool[quizCurrentIndex];
+            document.getElementById('quizCategoryTag').innerText = currentQuizWord.category;
+            document.getElementById('quizProgressText').innerText = `第 ${quizCurrentIndex + 1} 問 / 全 ${quizPool.length} 問`;
+            document.getElementById('quizStreakText').innerHTML = `<i class="fa-solid fa-fire"></i> ${quizStreak} 連続正解`;
+
+            document.getElementById('quizWord').innerText = currentQuizWord.word;
+            document.getElementById('quizReading').innerText = currentQuizWord.reading;
+            document.getElementById('quizExample').innerText = `「${currentQuizWord.example}」`;
+
+            let distractors = activeWordList
+                .filter(w => w.id !== currentQuizWord.id)
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 3);
+
+            let options = [currentQuizWord, ...distractors].sort(() => Math.random() - 0.5);
+
+            const optionsContainer = document.getElementById('quizOptions');
+            optionsContainer.innerHTML = options.map(opt => `
+                <button onclick="checkQuizAnswer(${opt.id})" class="quiz-opt-btn w-full p-4 rounded-2xl bg-white border border-slate-200 text-left font-bold text-slate-800 hover:bg-indigo-50 hover:border-indigo-300 transition-all shadow-sm">
+                    ${opt.meaning}
+                </button>
+            `).join('');
+        }
+
+        function checkQuizAnswer(selectedId) {
+            const btns = document.querySelectorAll('.quiz-opt-btn');
+            btns.forEach(b => b.disabled = true);
+
+            const isCorrect = selectedId === currentQuizWord.id;
+            const explanationCard = document.getElementById('quizExplanation');
+            const explanationResult = document.getElementById('explanationResult');
+            const explanationText = document.getElementById('explanationText');
+
+            explanationCard.classList.remove('hidden');
+
+            if (isCorrect) {
+                playCorrectSound();
+                quizStreak++;
+                explanationResult.innerText = "✨ 正解！";
+                explanationResult.className = "font-bold text-emerald-600 mb-1 text-base";
+                explanationText.innerText = `「${currentQuizWord.word}」＝ ${currentQuizWord.meaning}`;
+            } else {
+                playWrongSound();
+                quizStreak = 0;
+                weakWordIds.add(currentQuizWord.id);
+                saveWeakWords();
+                explanationResult.innerText = "❌ 不正解...";
+                explanationResult.className = "font-bold text-rose-600 mb-1 text-base";
+                explanationText.innerText = `正解は: 「${currentQuizWord.meaning}」 （要復習に自動登録）`;
+            }
+
+            document.getElementById('quizStreakText').innerHTML = `<i class="fa-solid fa-fire"></i> ${quizStreak} 連続正解`;
+            document.getElementById('nextQuizBtn').classList.remove('hidden');
+        }
+
+        function nextQuizQuestion() {
+            quizCurrentIndex++;
+            loadQuizQuestion();
+        }
+
+        let taTimerInterval = null;
+        let taTimeLeft = 60;
+        let taScore = 0;
+        let taCombo = 0;
+        let taMaxCombo = 0;
+        let taCorrectCount = 0;
+        let taCurrentWord = null;
+
+        function startTimeAttack() {
+            document.getElementById('taStartCard').classList.add('hidden');
+            document.getElementById('taResultCard').classList.add('hidden');
+            document.getElementById('taPlayCard').classList.remove('hidden');
+
+            taTimeLeft = 60;
+            taScore = 0;
+            taCombo = 0;
+            taMaxCombo = 0;
+            taCorrectCount = 0;
+
+            document.getElementById('taTimer').innerText = taTimeLeft;
+            document.getElementById('taScore').innerText = taScore;
+            document.getElementById('taCombo').innerText = taCombo;
+
+            if (taTimerInterval) clearInterval(taTimerInterval);
+            taTimerInterval = setInterval(() => {
+                taTimeLeft--;
+                document.getElementById('taTimer').innerText = taTimeLeft;
+                if (taTimeLeft <= 0) {
+                    endTimeAttack();
+                }
+            }, 1000);
+
+            nextTaQuestion();
+        }
+
+        function nextTaQuestion() {
+            taCurrentWord = activeWordList[Math.floor(Math.random() * activeWordList.length)];
+            document.getElementById('taWord').innerText = taCurrentWord.word;
+            document.getElementById('taReading').innerText = taCurrentWord.reading;
+
+            let distractors = activeWordList
+                .filter(w => w.id !== taCurrentWord.id)
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 3);
+
+            let options = [taCurrentWord, ...distractors].sort(() => Math.random() - 0.5);
+
+            document.getElementById('taOptions').innerHTML = options.map(opt => `
+                <button onclick="checkTaAnswer(${opt.id})" class="p-4 bg-white border border-slate-200 rounded-2xl font-bold text-slate-800 hover:bg-amber-50 hover:border-amber-300 transition-all shadow-sm text-sm">
+                    ${opt.meaning}
+                </button>
+            `).join('');
+        }
+
+        function checkTaAnswer(selectedId) {
+            if (selectedId === taCurrentWord.id) {
+                playCorrectSound();
+                taCombo++;
+                if (taCombo > taMaxCombo) taMaxCombo = taCombo;
+                taCorrectCount++;
+                taScore += 100 + (taCombo * 10);
+            } else {
+                playWrongSound();
+                taCombo = 0;
+            }
+
+            document.getElementById('taScore').innerText = taScore;
+            document.getElementById('taCombo').innerText = taCombo;
+            nextTaQuestion();
+        }
+
+        function endTimeAttack() {
+            clearInterval(taTimerInterval);
+            document.getElementById('taPlayCard').classList.add('hidden');
+            document.getElementById('taResultCard').classList.remove('hidden');
+
+            document.getElementById('taFinalScore').innerText = taScore;
+            document.getElementById('taCorrectCount').innerText = taCorrectCount;
+            document.getElementById('taMaxCombo').innerText = taMaxCombo;
+
+            confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+        }
+
+        let cardIndex = 0;
+        let isFlipped = false;
+
+        function initFlashcards() {
+            cardIndex = 0;
+            isFlipped = false;
+            updateCardView();
+        }
+
+        function updateCardView() {
+            const inner = document.getElementById('flashcardInner');
+            inner.classList.remove('rotate-y-180');
+            isFlipped = false;
+
+            const w = activeWordList[cardIndex];
+            document.getElementById('cardProgress').innerText = `${cardIndex + 1} / ${activeWordList.length}`;
+            document.getElementById('cardCategory').innerText = w.category;
+            document.getElementById('cardWord').innerText = w.word;
+            document.getElementById('cardReading').innerText = w.reading;
+            document.getElementById('cardMeaning').innerText = w.meaning;
+            document.getElementById('cardExample').innerText = `「${w.example}」`;
+
+            const weakBtn = document.getElementById('cardWeakBtn');
+            if (weakWordIds.has(w.id)) {
+                weakBtn.className = "px-4 py-2.5 bg-amber-500 text-white font-bold rounded-xl text-sm transition-all flex items-center gap-1 shadow-sm";
+                weakBtn.innerHTML = `<i class="fa-solid fa-bookmark"></i> 復習対象`;
+            } else {
+                weakBtn.className = "px-4 py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-800 font-bold rounded-xl text-sm transition-all flex items-center gap-1";
+                weakBtn.innerHTML = `<i class="fa-regular fa-bookmark"></i> 要復習に追加`;
+            }
+        }
+
+        function toggleCardFlip() {
+            const inner = document.getElementById('flashcardInner');
+            isFlipped = !isFlipped;
+            if (isFlipped) {
+                inner.classList.add('rotate-y-180');
+            } else {
+                inner.classList.remove('rotate-y-180');
+            }
+        }
+
+        function nextCard() {
+            if (cardIndex < activeWordList.length - 1) {
+                cardIndex++;
+                updateCardView();
+            }
+        }
+
+        function prevCard() {
+            if (cardIndex > 0) {
+                cardIndex--;
+                updateCardView();
+            }
+        }
+
+        function toggleWeakCurrentCard() {
+            const w = activeWordList[cardIndex];
+            if (weakWordIds.has(w.id)) {
+                weakWordIds.delete(w.id);
+            } else {
+                weakWordIds.add(w.id);
+            }
+            saveWeakWords();
+            updateCardView();
+        }
+
+        function speakCurrentWord() {
+            if ('speechSynthesis' in window) {
+                const w = activeWordList[cardIndex];
+                const uttr = new SpeechSynthesisUtterance(w.reading || w.word);
+                uttr.lang = 'ja-JP';
+                window.speechSynthesis.speak(uttr);
+            }
+        }
+
+        let memoryCards = [];
+        let flippedMemoryTiles = [];
+        let matchedPairs = 0;
+
+        function initMemoryGame() {
+            const grid = document.getElementById('memoryGrid');
+            grid.innerHTML = '';
+            flippedMemoryTiles = [];
+            matchedPairs = 0;
+
+            const sampleWords = [...activeWordList].sort(() => Math.random() - 0.5).slice(0, 6);
+            memoryCards = [];
+
+            sampleWords.forEach(w => {
+                memoryCards.push({ id: w.id, text: w.word, type: 'word' });
+                memoryCards.push({ id: w.id, text: w.meaning, type: 'meaning' });
+            });
+
+            memoryCards.sort(() => Math.random() - 0.5);
+
+            memoryCards.forEach((card, idx) => {
+                const tile = document.createElement('div');
+                tile.className = "memory-tile bg-indigo-600 text-white rounded-2xl h-24 flex items-center justify-center p-3 text-center font-bold text-xs cursor-pointer hover:bg-indigo-700 transition-all shadow-md select-none";
+                tile.dataset.index = idx;
+                tile.innerHTML = `<span class="text-2xl">古</span>`;
+                tile.onclick = () => flipMemoryTile(tile, card);
+                grid.appendChild(tile);
+            });
+        }
+
+        function flipMemoryTile(tile, card) {
+            if (flippedMemoryTiles.length >= 2 || tile.classList.contains('matched') || tile.classList.contains('flipped')) return;
+
+            tile.classList.add('flipped', 'bg-white', 'text-slate-900', 'border-2', 'border-indigo-500');
+            tile.classList.remove('bg-indigo-600', 'text-white');
+            tile.innerHTML = `<span>${card.text}</span>`;
+            flippedMemoryTiles.push({ tile, card });
+
+            if (flippedMemoryTiles.length === 2) {
+                const [first, second] = flippedMemoryTiles;
+                if (first.card.id === second.card.id && first.card.type !== second.card.type) {
+                    playCorrectSound();
+                    first.tile.classList.add('matched', 'border-emerald-500', 'bg-emerald-50');
+                    second.tile.classList.add('matched', 'border-emerald-500', 'bg-emerald-50');
+                    flippedMemoryTiles = [];
+                    matchedPairs++;
+                    if (matchedPairs === 6) {
+                        setTimeout(() => {
+                            confetti({ particleCount: 100, spread: 70 });
+                            showToast('全ペアをクリアしました！🎉', 'success');
+                        }, 300);
+                    }
+                } else {
+                    playWrongSound();
+                    setTimeout(() => {
+                        [first, second].forEach(item => {
+                            item.tile.classList.remove('flipped', 'bg-white', 'text-slate-900', 'border-2', 'border-indigo-500');
+                            item.tile.classList.add('bg-indigo-600', 'text-white');
+                            item.tile.innerHTML = `<span class="text-2xl">古</span>`;
+                        });
+                        flippedMemoryTiles = [];
+                    }, 1000);
+                }
+            }
+        }
+
+        let isWeakOnlyFilter = false;
+
+        function renderWordListTable() {
+            const tbody = document.getElementById('wordTableBody');
+            const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
+
+            let filtered = activeWordList.filter(w => {
+                const matchSearch = w.word.toLowerCase().includes(searchVal) || 
+                                    w.reading.toLowerCase().includes(searchVal) || 
+                                    w.meaning.toLowerCase().includes(searchVal);
+                const matchWeak = isWeakOnlyFilter ? weakWordIds.has(w.id) : true;
+                return matchSearch && matchWeak;
+            });
+
+            tbody.innerHTML = filtered.map(w => {
+                const isWeak = weakWordIds.has(w.id);
+                return `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="p-3 font-bold text-indigo-950">${w.word}</td>
+                        <td class="p-3 text-slate-500 text-xs">${w.reading}</td>
+                        <td class="p-3 font-medium text-slate-800">${w.meaning}</td>
+                        <td class="p-3"><span class="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">${w.category}</span></td>
+                        <td class="p-3 text-center">
+                            <button onclick="toggleWeakWord(${w.id})" class="text-lg transition-transform hover:scale-125">
+                                ${isWeak ? '<i class="fa-solid fa-bookmark text-amber-500"></i>' : '<i class="fa-regular fa-bookmark text-slate-300"></i>'}
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function filterWordList() {
+            renderWordListTable();
+        }
+
+        function filterWeakOnlyToggle() {
+            isWeakOnlyFilter = !isWeakOnlyFilter;
+            const btn = document.getElementById('weakFilterBtn');
+            if (isWeakOnlyFilter) {
+                btn.className = "flex-1 md:flex-none px-4 py-2.5 bg-amber-500 text-white font-bold rounded-xl text-xs hover:bg-amber-600 transition-all";
+            } else {
+                btn.className = "flex-1 md:flex-none px-4 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition-all";
+            }
+            renderWordListTable();
+        }
+
+        function toggleWeakWord(id) {
+            if (weakWordIds.has(id)) {
+                weakWordIds.delete(id);
+            } else {
+                weakWordIds.add(id);
+            }
+            saveWeakWords();
+            renderWordListTable();
+        }
+
+        function saveWeakWords() {
+            localStorage.setItem('kobun_weak_ids', JSON.stringify([...weakWordIds]));
+            updateDashboardStats();
+        }
+
+        function exportToExcel() {
+            const dataToExport = activeWordList.map(w => ({
+                "単語": w.word,
+                "読み": w.reading,
+                "意味": w.meaning,
+                "品詞": w.category,
+                "例文": w.example,
+                "要復習": weakWordIds.has(w.id) ? "★" : ""
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "古文単語一覧");
+            XLSX.writeFile(workbook, "kobun_tango_exported.xlsx");
+            showToast('Excelファイルを出力しました', 'success');
+        }
+    </script>
+</body>
+</html>
